@@ -18,6 +18,72 @@ const options = {
   }
 };
 
+const MealType = {
+  BREAKFAST: 'breakfast',
+  LUNCH: 'lunch',
+  DINNER: 'dinner'
+}
+
+const MapTypeToLocations = {
+  [MealType.BREAKFAST]: 'Café no CCA',
+  [MealType.LUNCH]: 'Almoço em Juazeiro, Sede e CCA',
+  [MealType.DINNER]: 'Jantar em Juazeiro, Sede e CCA',
+}
+
+const MapTypeToTime = {
+  [MealType.BREAKFAST]: '7h às 08h30',
+  [MealType.LUNCH]: '11h às 14h',
+  [MealType.DINNER]: ' 17h30 às 20h (exceto no CCA)',
+}
+
+const MapBreakfastToImages: { [key: number]: string } = {
+  0: 'drink_coffe',
+  1: 'pao',
+  2: 'frutas',
+  3: 'cuscuz',
+  4: 'ovos'
+}
+
+const MapLunchToImages: { [key: number]: string } = {
+  0: 'salada_crua',
+  1: 'vinagrete',
+  2: 'salada_cozida',
+  3: 'principal',
+  4: 'frango',
+  5: 'vegetariano',
+  6: 'farofa',
+  7: 'arroz',
+  8: 'sucos',
+  9: 'chocolate',
+}
+
+const MapDinnerToImages: { [key: number]: string } = {
+  0: 'salada_crua',
+  1: 'vinagrete',
+  2: 'arroz',
+  3: 'principal',
+  4: 'vegetariano',
+  5: 'cuscuz',
+  6: 'pao',
+  7: 'sopa',
+  8: 'drink_coffe',
+}
+
+const mapImages = ({ type, index }: { type: string; index: number }) => {
+  if (type === MealType.BREAKFAST) {
+    return MapBreakfastToImages[index];
+  }
+  if (type === MealType.LUNCH) {
+    return MapLunchToImages[index];
+  }
+  if (type === MealType.DINNER) {
+    return MapDinnerToImages[index];
+  }
+  return null;
+}
+
+const tabDayLabel = (a: string) => a.substr(0, 3).concat('/', a.split('/')[0].substr(-2));
+
 const getCardapioUrl = ($: CheerioStatic) =>
   $("div:nth-child(1) > h3 > a")
     .first()
@@ -30,25 +96,34 @@ const parseCardapio = () =>
       const days = tables[0].splice(1);
 
       const result: any = {};
-      const meals = [
-        { type: "breakfast", itens: 5, startAt: 1 },
-        { type: "lunch", itens: 9, startAt: 8 },
-        { type: "dinner", itens: 9, startAt: 20 }
+      const meals: Array<{ type: string; itens: number; startAt: number }> = [
+        { type: MealType.BREAKFAST, itens: 5, startAt: 1 },
+        { type: MealType.LUNCH, itens: 10, startAt: 8 },
+        { type: MealType.DINNER, itens: 9, startAt: 20 }
       ];
 
-      days.forEach((day: string | number, daysIndex: number) => {
-        result[day] = {};
-        
+      days.forEach((day: string, idx: number) => {
+        const dayIndex = idx + 1
+        result[dayIndex] = { day, tabDayLabel: tabDayLabel(day) };
+
         meals.forEach(meal => {
           const mealValues = [];
+
           for (let index = 0; index < meal.itens; index++) {
+            const mealDescription = tables[index + meal.startAt][0];
+
             mealValues.push({
-              meal: tables[index + meal.startAt][0],
-              description: tables[index + meal.startAt][daysIndex + 1]
+              meal: !!mealDescription ? mealDescription : 'Principal',
+              description: tables[index + meal.startAt][dayIndex],
+              image: mapImages({ type: meal.type, index }),
             });
           }
 
-          result[day][meal.type] = mealValues;
+          result[dayIndex][meal.type] = {
+            'data': mealValues,
+            'location': MapTypeToLocations[meal.type],
+            'time': MapTypeToTime[meal.type],
+          }
         });
       });
 
@@ -90,7 +165,7 @@ export const cardapioUpload = functions.https.onRequest(
 
       await cardapioRef.set({ data });
 
-      response.sendStatus(200);
+      response.json({ data });
     } catch (error) {
       console.log("error", error);
       response.sendStatus(500);
