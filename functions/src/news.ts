@@ -64,9 +64,6 @@ interface Latest {
   data: News[];
 }
 
-const token =
-  "dXZXnkF9vf8:APA91bH8dUnLQqp3ghfK045XKQUzVoodkfMnPSHKAIob-D1hupPUGcLzirhIm4WR5mLYuqPUIrdkmIjtJKs-3J_Ip5X9Lp9B95P9kS5Z0ciCQ9ousKj-lQoId2iuuUgUoI2NBDMhUfBU";
-
 export const getLatestNews = functions.https.onRequest(
   async (request, response) => {
     try {
@@ -91,7 +88,7 @@ export const getLatestNews = functions.https.onRequest(
 
       for (let index = 0; index < lastNewsIndex; index++) {
         const message = freshNews[index];
-        await admin.messaging().sendToDevice(token, {
+        await admin.messaging().sendToTopic('latest_news', {
           notification: {
             title: "Uma nova notícia",
             body: message.title
