@@ -95,7 +95,7 @@ const parseCardapio = () =>
       const { tables } = data.pageTables[0];
       const days = tables[0].splice(1);
 
-      const result: any = {};
+      const result: { [index: string]: any } = {};
       const meals: Array<{ type: string; itens: number; startAt: number }> = [
         { type: MealType.BREAKFAST, itens: 5, startAt: 1 },
         { type: MealType.LUNCH, itens: 10, startAt: 8 },
@@ -104,7 +104,7 @@ const parseCardapio = () =>
 
       days.forEach((day: string, idx: number) => {
         const dayIndex = idx + 1
-        result[dayIndex] = { day, tabDayLabel: tabDayLabel(day) };
+        result[String(dayIndex)] = { day, tabDayLabel: tabDayLabel(day) };
 
         meals.forEach(meal => {
           const mealValues = [];
@@ -149,13 +149,26 @@ const downloadFileAndExtractData = async (pdfUrl: string) =>
     await rp(pdfUrl).pipe(file).on("close", extractData);
   });
 
+const getLatestPdfUrl = async ({ db }: { db: FirebaseFirestore.DocumentReference }) => {
+  const cardapioDataRef = await db.get();
+  const cardapioData = cardapioDataRef.data();
+
+  return cardapioData ? cardapioData.pdfUrl : null;
+}
+
+const sendNotification = async () =>
+  await admin.messaging().sendToTopic('latest_news', {
+    notification: {
+      title: "🍲 Cardápio atualizado",
+      body: "👀 Confira o cardápio semanal completo"
+    }
+  });
+
 export const cardapioUpload = functions.https.onRequest(
   async (request, response) => {
     try {
       const document = await rp(options);
       const pdfUrl = getCardapioUrl(document);
-
-      const data = await downloadFileAndExtractData(pdfUrl);
 
       // save to firestore
       const cardapioRef = await admin
@@ -163,9 +176,18 @@ export const cardapioUpload = functions.https.onRequest(
         .collection("cardapio")
         .doc("latest");
 
-      await cardapioRef.set({ data });
+      const latestPdfUrl = await getLatestPdfUrl({ db: cardapioRef });
 
-      response.json({ data });
+      // pdf data has changed
+      if (latestPdfUrl !== pdfUrl) {
+        const data = await downloadFileAndExtractData(pdfUrl);
+
+        await cardapioRef.set({ data, pdfUrl });
+
+        await sendNotification();
+      }
+
+      response.sendStatus(200);
     } catch (error) {
       console.log("error", error);
       response.sendStatus(500);
